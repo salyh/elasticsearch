@@ -28,7 +28,7 @@ import org.elasticsearch.index.fielddata.ordinals.Ordinals.Docs;
 public abstract class DoubleValues {
 
     public static final DoubleValues EMPTY = new Empty();
-    private final boolean multiValued;
+    protected boolean multiValued;
     protected final Iter.Single iter = new Iter.Single();
 
 
@@ -58,7 +58,6 @@ public abstract class DoubleValues {
     }
 
     public Iter getIter(int docId) {
-        assert !isMultiValued();
         if (hasValue(docId)) {
             return iter.reset(getValue(docId));
         } else {
