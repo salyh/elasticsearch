@@ -26,6 +26,7 @@ import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.BulkScorer;
 import org.apache.lucene.search.CollectionStatistics;
 import org.apache.lucene.search.Collector;
+import org.apache.lucene.search.CollectorManager;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
@@ -188,6 +189,15 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
         } else {
             cancellableWeight = weight;
         }
+
+        //for https://github.com/elastic/elasticsearch/issues/30758 we need something like this
+        //if (profiler != null || aggregatedDfs != null) {
+        //    super.search(leaves, cancellableWeight, collector);
+        //} else {
+        //    search(List<LeafReaderContext>,Weight,Collector) is protected
+        //    in.search(leaves, cancellableWeight, collector);
+        //}
+
         super.search(leaves, cancellableWeight, collector);
     }
 
@@ -226,6 +236,32 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
             return super.collectionStatistics(field);
         }
         return collectionStatistics;
+    }
+
+    //partly fix https://github.com/elastic/elasticsearch/issues/30758
+    //this is not perfect because if we do this then we loose "Reduce the overhead of timeouts and low-level search cancellation"
+    //https://github.com/elastic/elasticsearch/pull/25776
+    //but search(List<LeafReaderContext>,Weight,Collector) is protected so we can not delegate it
+    @Override
+    public void search(Query query, Collector results) throws IOException {
+        if (profiler != null || aggregatedDfs != null) {
+            super.search(query, results);
+        } else {
+            in.search(query, results);
+        }
+    }
+
+    //partly fix https://github.com/elastic/elasticsearch/issues/30758
+    //this is not perfect because if we do this then we loose "Reduce the overhead of timeouts and low-level search cancellation"
+    //https://github.com/elastic/elasticsearch/pull/25776
+    //but search(List<LeafReaderContext>,Weight,Collector) is protected so we can not delegate it
+    @Override
+    public <C extends Collector, T> T search(Query query, CollectorManager<C, T> collectorManager) throws IOException {
+        if (profiler != null || aggregatedDfs != null) {
+            return super.search(query, collectorManager);
+        } else {
+            return in.search(query, collectorManager);
+        }
     }
 
     public DirectoryReader getDirectoryReader() {
